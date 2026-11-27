@@ -991,6 +991,8 @@ const state = {
   market: 'all', quick: null, faixa: 'all', games: new Set(), venue: null,
   offset: 0, sort: store.get('sort', 'conf'), view: store.get('view', 'chart'), side: 'all',
   search: '', pins: store.get('pins', []), odds: store.get('odds', 'dec'),
+  // Desplegables abiertos por el usuario: se respetan al redibujar (antes «Armar combinada» se abría en cada clic).
+  open: new Set(),
   detail: null, range: 'l10', thr: store.get('thr', 73),
   combo: { target: store.get('cb-target2', '120'), max: store.get('cb-max', 15), style: store.get('cb-style', 'safe'), pg: store.get('cb-pg2', 3), floor: store.get('cb-floor', 'auto'), stake: store.get('cb-stake', '10000'), house: '', result: null },
 };
@@ -1407,7 +1409,7 @@ function totalHtml(g, side, L) {
   const dayRow = dp ? `<div class="t-day">⭐ <b>Pick del día:</b> más de <b class="num">${dp.line}</b> (${dp.prob} %, ${dp.gap ?? Math.round((mk.total - dp.line) * 10) / 10} puntos bajo la casa)</div>`
     : `<div class="t-day off">Sin pick de total hoy: ${!si || si.sp < 5 ? 'partido parejo, y en la temporada el total de estos partidos acertó solo 62-70 %' : 'ninguna línea 16 o más puntos bajo la casa llega al 73 %'}.</div>`;
   return `<div class="tot">${head}${dayRow}${oddsRow}
-    <details><summary>Ver escalera de líneas</summary><div class="table-wrap"><table><thead><tr><th>Más de</th><th>Mercado</th><th>Temporada</th><th>Últ. 20</th></tr></thead><tbody>${tl.rows.map((r) =>
+    <details data-keep="ladder-${esc(g.id)}"${state.open.has('ladder-' + g.id) ? ' open' : ''}><summary>Ver escalera de líneas</summary><div class="table-wrap"><table><thead><tr><th>Más de</th><th>Mercado</th><th>Temporada</th><th>Últ. 20</th></tr></thead><tbody>${tl.rows.map((r) =>
       `<tr><td class="num"><b>${r.line}</b></td><td class="num">${pc(r.market)}</td><td class="num">${pc(r.season)}</td><td class="num">${pc(r.last)}</td></tr>`).join('')}</tbody></table></div>
       <p class="note">Mercado: ${tl.nResid ? `cuántas veces el total real superó «línea de la casa menos esos puntos» en los ${tl.nResid} partidos jugados esta temporada` : `parte de la línea de la casa y una dispersión de ±${tl.sd.toFixed(0)} puntos`}. Temporada: ${tl.nCur} partidos de los dos equipos. Últimos 20 de cada uno incluye la temporada pasada.</p></details></div>`;
 }
@@ -1471,7 +1473,7 @@ function comboHtml(L, bt) {
       <div class="d-actions"><button class="btn ghost" data-combo-copy>Copiar combinada</button></div>
       <p class="note">Con cuotas justas, la probabilidad conjunta es siempre ≈ 1 ÷ cuota (${tgt ? (100 / tgt).toFixed(tgt > 20 ? 2 : 0) : '–'} % para ${tgt ? tgt.toFixed(2) : '–'}): en promedio acierta 1 de cada ${tgt ? Math.round(tgt) : '–'} veces. Elegir patas más seguras no lo cambia. Una casa paga menos que la cuota justa por su margen.</p></div>`;
   }
-  return `<details class="builder"${r ? ' open' : ''}><summary>🧮 Armar combinada por cuota</summary>
+  return `<details class="builder" data-keep="builder"${state.open.has('builder') ? ' open' : ''}><summary>🧮 Armar combinada por cuota</summary>
     <div class="b-form">
       <label for="cb-target">Cuota objetivo<input id="cb-target" type="text" inputmode="text" value="${esc(c.target)}" placeholder="120 (×120)" autocomplete="off"></label>
       <label for="cb-stake">Apuesta<input id="cb-stake" type="text" inputmode="numeric" value="${esc(c.stake)}" placeholder="10000" autocomplete="off"></label>
@@ -1755,7 +1757,7 @@ document.addEventListener('click', (e) => {
   if (c('#btn-side')) { const k = Object.keys(SIDES); state.side = k[(k.indexOf(state.side) + 1) % k.length]; return render(); }
   if (c('#btn-sort')) { const k = Object.keys(SORTS); state.sort = k[(k.indexOf(state.sort) + 1) % k.length]; store.set('sort', state.sort); state.quick = null; return render(); }
   if (c('#btn-view')) { const k = Object.keys(VIEWS); state.view = k[(k.indexOf(state.view) + 1) % k.length]; store.set('view', state.view); return render(); }
-  if (c('[data-combo-build]')) { const L = curLeague(); buildComboNow(L, btFor(L, 'over')); return render(); }
+  if (c('[data-combo-build]')) { const L = curLeague(); buildComboNow(L, btFor(L, 'over')); state.open.add('builder'); return render(); }
   if (c('[data-combo-copy]')) return copyCombo();
   if (c('#btn-pins')) return openPins();
   if (c('[data-open-history]')) return openHistory();
@@ -1806,6 +1808,11 @@ document.addEventListener('change', (e) => {
   else if (id === 'cb-pg') { c.pg = Number(e.target.value); store.set('cb-pg2', c.pg); }
   else if (id === 'cb-floor') { c.floor = e.target.value; store.set('cb-floor', c.floor); }
 });
+// «toggle» no burbujea: se escucha en captura para recordar qué desplegables dejó abiertos el usuario.
+document.addEventListener('toggle', (e) => {
+  const k = e.target.dataset?.keep;
+  if (k) e.target.open ? state.open.add(k) : state.open.delete(k);
+}, true);
 let st;
 $('#search').addEventListener('input', (e) => { clearTimeout(st); st = setTimeout(() => { state.search = e.target.value; render(); }, 120); });
 
